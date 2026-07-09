@@ -119,6 +119,21 @@
     position: fixed; inset: 0; pointer-events: none; z-index: 16; overflow: hidden;
     mix-blend-mode: screen;
   }
+  #audioGate {
+    position: fixed; inset: 0; z-index: 3000; display: grid; place-items: center;
+    width: 100%; height: 100%; padding: 0; border: 0; background: rgba(0,0,0,0.72);
+    color: #fff; cursor: pointer;
+  }
+  #audioGate.hidden { display: none; }
+  #audioGateIcon {
+    position: relative; width: 76px; height: 76px; border: 2px solid rgba(255,255,255,0.92);
+    border-radius: 50%; box-shadow: 0 0 18px rgba(255,255,255,0.34), 0 0 54px rgba(255,255,255,0.16);
+  }
+  #audioGateIcon::after {
+    content: ""; position: absolute; left: 30px; top: 23px;
+    border-top: 15px solid transparent; border-bottom: 15px solid transparent;
+    border-left: 23px solid #fff;
+  }
   .traceLightWrap {
     position: absolute; height: 2px; transform-origin: 0 50%;
   }
@@ -399,6 +414,9 @@
 <canvas id="glcanvas"></canvas>
 <div id="popupLayer"></div>
 <div id="traceLayer"></div>
+<button id="audioGate" type="button" aria-label="音響を開始">
+  <span id="audioGateIcon" aria-hidden="true"></span>
+</button>
 <div id="figureLayer" aria-hidden="true">
   <div id="projectionText"></div>
   <div id="humanWall">
@@ -845,6 +863,180 @@ let spawnTimer = null;   // ホバー中の増殖タイマー
 let removeTimer = null;  // 離脱後、古い順に消すタイマー
 let spawnSeq = 0;
 let currentAudio = null;
+const TRACE_SE_FILES = {
+  travel: [
+    'sound_effects/trace-travel-star-flash.mp3',
+    'sound_effects/trace-travel-star-disappear.mp3'
+  ],
+  absorb: ['sound_effects/trace-absorb-confirm-button.mp3']
+};
+let traceAudioContext = null;
+let traceNoiseBuffer = null;
+const traceAudioPreloads = new Map();
+const audioGate = document.getElementById('audioGate');
+
+function updateAudioGate() {
+  if (!audioGate) return;
+  audioGate.classList.toggle('hidden', traceAudioContext?.state === 'running');
+}
+
+function ensureTraceAudio(attemptResume = true) {
+  if (!traceAudioContext) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    traceAudioContext = new AudioContextClass();
+    traceAudioContext.addEventListener('statechange', updateAudioGate);
+  }
+  if (attemptResume && traceAudioContext.state === 'suspended') {
+    traceAudioContext.resume().then(updateAudioGate).catch(updateAudioGate);
+  }
+  return traceAudioContext;
+}
+
+function preloadTraceSEFiles() {
+  Object.values(TRACE_SE_FILES).flat().forEach(src => {
+    if (!src || traceAudioPreloads.has(src)) return;
+    const audio = new Audio();
+    audio.preload = 'auto';
+    audio.src = src;
+    audio.load();
+    traceAudioPreloads.set(src, audio);
+  });
+}
+
+function traceFrequency(color) {
+  const match = String(color || '').match(/^#?([0-9a-f]{6})$/i);
+  if (!match) return 440;
+  const value = parseInt(match[1], 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  return 300 + ((r * 0.37 + g * 0.51 + b * 0.12) / 255) * 360;
+}
+
+function getTraceNoiseBuffer(ctx) {
+  if (traceNoiseBuffer && traceNoiseBuffer.sampleRate === ctx.sampleRate) return traceNoiseBuffer;
+  traceNoiseBuffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 0.9), ctx.sampleRate);
+  const data = traceNoiseBuffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  return traceNoiseBuffer;
+}
+
+function playTraceSE(kind, color, pan = 0) {
+  const sourceOptions = TRACE_SE_FILES[kind] || [];
+  const externalSource = Array.isArray(sourceOptions)
+    ? sourceOptions[(Math.random() * sourceOptions.length) | 0]
+    : sourceOptions;
+  if (externalSource) {
+    const preloaded = traceAudioPreloads.get(externalSource);
+    const audio = preloaded ? preloaded.cloneNode(true) : new Audio(externalSource);
+    audio.volume = kind === 'travel' ? 0.24 : 0.34;
+    audio.play().catch(() => {});
+    return;
+  }
+
+  const ctx = ensureTraceAudio();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const base = traceFrequency(color);
+  const master = ctx.createGain();
+  const stereo = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+  master.gain.value = 0.72;
+  if (stereo) {
+    stereo.pan.value = Math.max(-1, Math.min(1, pan));
+    master.connect(stereo).connect(ctx.destination);
+  } else {
+    master.connect(ctx.destination);
+  }
+
+  if (kind === 'travel') {
+    const duration = 0.68;
+    const tone = ctx.createOscillator();
+    const toneGain = ctx.createGain();
+    const noise = ctx.createBufferSource();
+    const filter = ctx.createBiquadFilter();
+    const noiseGain = ctx.createGain();
+
+    tone.type = 'triangle';
+    tone.frequency.setValueAtTime(base * 0.62, now);
+    tone.frequency.exponentialRampToValueAtTime(base * 1.9, now + duration);
+    toneGain.gain.setValueAtTime(0.0001, now);
+    toneGain.gain.exponentialRampToValueAtTime(0.018, now + 0.08);
+    toneGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    noise.buffer = getTraceNoiseBuffer(ctx);
+    filter.type = 'bandpass';
+    filter.Q.value = 1.4;
+    filter.frequency.setValueAtTime(base * 1.2, now);
+    filter.frequency.exponentialRampToValueAtTime(base * 5.2, now + duration);
+    noiseGain.gain.setValueAtTime(0.0001, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.022, now + 0.12);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    tone.connect(toneGain).connect(master);
+    noise.connect(filter).connect(noiseGain).connect(master);
+    tone.start(now);
+    noise.start(now);
+    tone.stop(now + duration + 0.03);
+    noise.stop(now + duration + 0.03);
+
+    // 軌道上を追いかける、短い星屑の粒。特定の旋律ではなく色ごとに音高が変わる。
+    [1, 1.26, 1.5, 2, 2.52, 3].forEach((ratio, index) => {
+      const start = now + index * 0.085;
+      const sparkle = ctx.createOscillator();
+      const sparkleGain = ctx.createGain();
+      const sparkleFilter = ctx.createBiquadFilter();
+      sparkle.type = index % 2 ? 'sine' : 'triangle';
+      sparkle.frequency.setValueAtTime(base * ratio, start);
+      sparkle.frequency.exponentialRampToValueAtTime(base * ratio * 1.18, start + 0.16);
+      sparkleFilter.type = 'highpass';
+      sparkleFilter.frequency.value = 720;
+      sparkleGain.gain.setValueAtTime(0.0001, start);
+      sparkleGain.gain.exponentialRampToValueAtTime(0.038, start + 0.012);
+      sparkleGain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
+      sparkle.connect(sparkleFilter).connect(sparkleGain).connect(master);
+      sparkle.start(start);
+      sparkle.stop(start + 0.2);
+    });
+  } else {
+    const duration = 0.72;
+    const low = ctx.createOscillator();
+    const shimmer = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+
+    low.type = 'sine';
+    shimmer.type = 'triangle';
+    low.frequency.setValueAtTime(base * 0.95, now);
+    low.frequency.exponentialRampToValueAtTime(58, now + duration);
+    shimmer.frequency.setValueAtTime(base * 2.1, now);
+    shimmer.frequency.exponentialRampToValueAtTime(115, now + 0.42);
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(2400, now);
+    filter.frequency.exponentialRampToValueAtTime(180, now + duration);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.075, now + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    low.connect(filter);
+    shimmer.connect(filter);
+    filter.connect(gain).connect(master);
+    low.start(now);
+    shimmer.start(now);
+    low.stop(now + duration + 0.03);
+    shimmer.stop(now + duration + 0.03);
+  }
+
+  setTimeout(() => master.disconnect(), 1000);
+}
+
+['pointerdown', 'touchstart', 'keydown'].forEach(type => {
+  window.addEventListener(type, ensureTraceAudio, { once: true, passive: true });
+});
+if (audioGate) audioGate.addEventListener('click', ensureTraceAudio);
+preloadTraceSEFiles();
+ensureTraceAudio(false);
+updateAudioGate();
 let mousePX = -9999, mousePY = -9999; // カーソルのピクセル座標（回避用）
 
 const traceLayer = document.getElementById('traceLayer');
@@ -923,7 +1115,6 @@ const TRACE_LIBRARY = {
   }
 };
 let integratedTraceCount = 0;
-let lastSpeechAt = 0;
 let currentSpeechNode = 'default';
 let activeTraceColor = '#ffffff';
 let lastTraceColorAt = 0;
@@ -1403,22 +1594,6 @@ function addTraceEntry(action, word, color) {
   while (traceLog.children.length > 5) traceLog.lastChild.remove();
 }
 
-function speakTrace(word) {
-  if (!('speechSynthesis' in window)) return;
-  const now = performance.now();
-  if (now - lastSpeechAt < 1200) return;
-  lastSpeechAt = now;
-  try {
-    const utterance = new SpeechSynthesisUtterance(word);
-    utterance.lang = 'ja-JP';
-    utterance.volume = 0.32;
-    utterance.rate = 0.82 + Math.random() * 0.12;
-    utterance.pitch = 0.82 + Math.random() * 0.28;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-  } catch (e) {}
-}
-
 function setHumanVideo(nodeKey) {
   if (!humanVideo || !humanWall) return;
   const src = HUMAN_VIDEO_MAP[nodeKey] || HUMAN_VIDEO_MAP.default || "";
@@ -1486,7 +1661,6 @@ function integrateTrace(rec) {
   setTimeout(() => humanFigure.classList.remove('integrating'), 880);
 
   addTraceEntry(action, word, color);
-  speakTrace(word);
 }
 
 function emitTraceFromPopup(rect, rec) {
@@ -1513,8 +1687,10 @@ function emitTraceFromPopup(rect, rec) {
   wrap.appendChild(beam);
   traceLayer.appendChild(wrap);
   updateTraceFormula(color, rec.nodeKey);
+  playTraceSE('travel', color, (startX / window.innerWidth) * 2 - 1);
 
   setTimeout(() => {
+    playTraceSE('absorb', color, (target.x / window.innerWidth) * 2 - 1);
     spawnResidualSparks(target.x, target.y, color);
     integrateTrace(rec);
   }, 680);
