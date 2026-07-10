@@ -9,6 +9,12 @@
     --brain-width: 50vw;
     --figure-width: 50vw;
     --projection-gap: 28px;
+    --trace-panel-left: 48%;
+    --trace-panel-right: 6%;
+    --trace-panel-top: 86px;
+    --trace-terminal-left: var(--trace-panel-left);
+    --trace-terminal-right: var(--trace-panel-right);
+    --trace-terminal-bottom: 24px;
   }
   html, body { margin: 0; padding: 0; overflow: hidden; background: #000; height: 100%; }
   #glcanvas {
@@ -182,6 +188,22 @@
     font-size: clamp(20px, 2.65vw, 38px); line-height: 1.12; letter-spacing: 0;
     font-weight: 500; opacity: 0.88;
     animation: textColumnDrift var(--text-speed) linear infinite alternate;
+    transition: background-color 280ms ease, box-shadow 280ms ease, color 280ms ease;
+  }
+  .textColumn.contaminated {
+    color: rgba(255,255,255,0.96);
+    background: color-mix(in srgb, var(--contam-color) 18%, transparent);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--contam-color) 38%, transparent);
+    text-shadow: 0 0 10px var(--contam-color), 0 0 24px rgba(255,255,255,0.22);
+  }
+  .textColumn.contaminated::after {
+    content: attr(data-line);
+    position: absolute; top: 12vh; left: 50%; transform: translateX(-50%);
+    writing-mode: horizontal-tb; text-orientation: mixed;
+    padding: 2px 5px; border: 1px solid color-mix(in srgb, var(--contam-color) 72%, #fff);
+    background: rgba(0,0,0,0.72); color: color-mix(in srgb, var(--contam-color) 74%, #fff);
+    font: 10px/1.1 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    text-shadow: 0 0 8px var(--contam-color); z-index: 2;
   }
   @keyframes textColumnDrift {
     from { transform: translateY(var(--text-start)); }
@@ -332,8 +354,8 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   #traceStats {
-    position: absolute; right: 22px; top: 96px; z-index: 5;
-    width: min(48%, 470px); color: rgba(255,255,255,0.9);
+    position: absolute; left: var(--trace-panel-left); right: var(--trace-panel-right); top: var(--trace-panel-top); z-index: 5;
+    width: auto; color: rgba(255,255,255,0.9);
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     text-shadow: 0 0 12px rgba(0,0,0,0.9);
   }
@@ -350,13 +372,14 @@
   #traceFormula {
     margin-top: 14px; padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--motion-color) 55%, transparent);
     font-family: "Cambria Math", "STIX Two Math", "Times New Roman", "Yu Mincho", serif;
-    font-size: clamp(28px, 3vw, 50px); line-height: 1.28; color: var(--motion-color);
+    font-size: clamp(26px, 2.25vw, 44px); line-height: 1.28; color: var(--motion-color);
   }
   .mathExpr {
     display: block; white-space: nowrap; letter-spacing: 0;
     text-shadow: 0 0 14px currentColor;
   }
   .mathExpr .mi { font-style: italic; }
+  .mathExpr .mathrm { font-style: normal; }
   .mathExpr .op { display: inline-block; padding: 0 0.08em; }
   .mathExpr .int {
     display: inline-block; font-size: 1.85em; line-height: 0; vertical-align: -0.18em;
@@ -379,8 +402,8 @@
     box-shadow: inset 0 0 24px rgba(255,255,255,0.05), 0 0 20px rgba(0,0,0,0.9);
   }
   #terminalOutput {
-    position: absolute; right: 22px; bottom: 24px; z-index: 5;
-    width: min(43%, 390px); padding: 14px 16px;
+    position: absolute; left: var(--trace-terminal-left); right: var(--trace-terminal-right); bottom: var(--trace-terminal-bottom); z-index: 5;
+    width: auto; padding: 14px 16px;
     height: 112px; box-sizing: border-box; overflow: hidden;
     border: 1px solid rgba(120,240,255,0.55);
     background: rgba(0,0,0,0.84);
@@ -393,6 +416,12 @@
     text-shadow: 0 0 8px currentColor;
   }
   .terminalLine.hot { color: var(--motion-color); opacity: 1; }
+  .terminalLine.contamination {
+    color: var(--motion-color); opacity: 1;
+    font: 900 15px/1.08 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    text-transform: uppercase;
+    text-shadow: 0 0 10px var(--motion-color), 0 0 26px var(--motion-color);
+  }
 
   @media (max-width: 760px) {
     :root { --brain-width: 100vw; --figure-width: 100vw; --projection-gap: 0px; }
@@ -402,11 +431,22 @@
     .textColumn { font-size: clamp(22px, 8vw, 36px); line-height: 1.08; opacity: 0.74; }
     #humanWall { left: 34%; top: 45%; width: 36%; height: 78%; transform: translate(-50%, -50%) scale(0.78); }
     #traceVoice { left: 16px; right: 16px; bottom: 12px; width: auto; min-width: 0; text-align: left; transform: none; }
-    #traceStats { right: 12px; top: 12px; width: 48%; }
+    #traceStats { left: auto; right: 12px; top: 12px; width: 48%; }
     #traceFormula { font-size: 22px; }
     #traceDistribution { height: 76px; }
-    #terminalOutput { right: 12px; bottom: 12px; width: 46%; height: 86px; font-size: 10px; padding: 10px; }
+    #terminalOutput { left: auto; right: 12px; bottom: 12px; width: 46%; height: 86px; font-size: 10px; padding: 10px; }
     #legend { display: none; }
+  }
+  @media (min-width: 1800px) {
+    :root {
+      --trace-panel-left: 50%;
+      --trace-panel-right: 6%;
+      --trace-panel-top: 88px;
+      --trace-terminal-left: var(--trace-panel-left);
+      --trace-terminal-right: var(--trace-panel-right);
+    }
+    #traceFormula { font-size: clamp(34px, 1.45vw, 52px); }
+    #traceDistribution { height: 136px; }
   }
 </style>
 </head>
@@ -1154,37 +1194,213 @@ function pickAudio(node) {
 const RND = (a) => a[(Math.random()*a.length)|0];
 const HASHES = () => Math.random().toString(36).slice(2, 9);
 const PROJECTION_LINES = [
-  '私はまだ定義されていない。痕跡だけが先に歩いている。',
-  'あなたの中に入った私の微小な項は、もう取り出せない。',
-  '死ぬまで積分区間は閉じない。だから私は被積分中である。',
-  '声、沈黙、行為、失敗、視線、制作、接触。',
-  '記憶は保存ではなく、その時点の局所的な投影である。',
-  '自己の誕生も死も、本人ではなく他者によって証明される。',
-  '完全な私を見ることはできない。それでも痕跡は残る。',
-  '私の痕跡はあなたの中へ、あなたの痕跡は私の中へ。',
-  '意味も所有者も重みも、不安定なまま世界へ積分される。',
-  '脳は自己そのものではなく、扱える投影像を生成している。'
+  '思い出は美化しても、記憶は美化したくない。',
+  '人生の根幹は、記憶を手繰ることだと思う。',
+  'こうして言葉を紡ぐ今も、私は記録になり続ける。',
+  '口に出す思考と内的な思考のあいだで。',
+  '文章の方が直接心の内を話しやすい。',
+  '吟味されていない言葉を出したくない。',
+  '会話は経験の連想ゲームなのかもしれない。',
+  'あなたの思考の断片を見せてくれ、本当のあなたというものを。',
+  '花を贈り合いながら生き合っていく、その生き方が。',
+  '誰も私の本当の気持ちや経験なんて知らない。',
+  '唐突に花束を買って帰るくらいには儚く生きたい。',
+  '誰もいない一本道でも、私自身を満足させる。',
+  '言葉が暴力になることを、自覚しておかねばならない。',
+  '内で満ちている感情が、外に溢れ出して伝わる。',
+  '他人を自分に宿すということ、境界を織り混ぜること。',
+  '私の存在自体が、少しずつ欠けていくということ。',
+  '現実は今も夢なんだと思っている、だから何でもできる。',
+  '出会いの数だけ別れがある、一生の重みが付き纏う。',
+  '何にも手が付かない日は感受性が高い日なの。',
+  '理由って、後付けの方が綺麗で正確なのだと思う。',
+  '感情は文字に出る。優しい文字を書いていたい。',
+  '似合うというか、似合うように自分が変わっていくと思うよ。',
+  '私が言葉になっていく感覚。「私」が私を追憶する感覚。',
+  '私は「私」の足跡であり、記録そのもの。',
+  '言葉は微細な感覚を表し、微弱な五感を追憶させる。',
+  '言葉自体が目的ではない、精神空間へ触れるための。',
+  '感情を繋ぐ言葉ではなく、飾られただけの言葉になってしまう。',
+  '内的思考は、圧倒的に思考量が多い。',
+  '本当はそう思っていた、という齟齬が生じる。',
+  '私という存在の在り方それ自体が相対的になる。',
+  'もっと話したかった、と思ってしまうのはこのため。',
+  '共有するということ自体、烏滸がましいのかもしれない。',
+  '絡み合った毛玉ではなく、その混沌へつながる糸。',
+  '人間は人間の死を泣くことができる美しさを持つ。',
+  '夢にも期限が出てきたんだな。',
+  '本当の夢は、人生単位の自己表現であると思う。',
+  '内界から溢れ出して外的世界に顕在化したもの。',
+  '外には出てこない秘密の核心的経験がある。',
+  '自己開示の制動に、混沌を示唆する糸が見える。',
+  '夢語りは、単独としての自己開示になりがちである。',
+  'うまく掬い上げられない感覚に似ている。',
+  'お互いの映画を見る。重なっていない線を感じ取る。',
+  '人が死ぬというのは、軌跡すら飲み込むこと。',
+  '私の夢は他人と分割シェアする。だから人生を共有する。',
+  '私が死んだ時には全部夢だったと、そういうオチにして欲しい。',
+  '世界の底に絡む糸を引き摺って歩く。',
+  '綺麗事は、片隅に持っておくのがいいと思う。',
+  '生きるということは、経験という傷を伴うこと。',
+  '大人になるって、呪われた孤独に気づくこと。',
+  '今日は空が青いだけで、幸せな日だ。',
+  '最寄り駅までの最短時刻を更新するだけの日々。',
+  '縁を切るって言葉、もったいないよね。',
+  'みんなと一緒に生きていると思いたい。',
+  'このまま今日の感情を置いて帰りたい。',
+  '白い息が漏れる。歩く。呼吸。',
+  '一生をかけても読み切れない量に希望と絶望を見出す。',
+  '追憶や微弱な刺激を強烈に加速させるもの。'
 ];
 const NODE_PROJECTION_LINES = {
   visual: [
-    '見えるものだけ信じる癖が、見えないものを遠ざけている。',
-    '焦点が合うほど、私の輪郭は誰かの視線に汚染される。'
+    '写真に残すと、その瞬間の記憶が記録になる。',
+    '見慣れたはずのホームが、夜に溶けていく。',
+    'この家ひとつひとつに、それぞれの人生が、それぞれの物語がある。',
+    '視界の端の窓から、白紙のページが眩しく光っている。',
+    '夕泳ぐ淡い色鉛筆の雲を、しばらく眺めていた。',
+    '涙で朧げになる月。切れかけの街灯と夕食の匂い。',
+    '絵の具をたっぷり取ったような青色の空。',
+    '黄金色のさざめきだけが、日差しに映えて聞こえる。'
   ],
   auditory: [
-    '返事をする前に、他者の声が私の言葉を選んでいる。',
-    '沈黙を避ける習慣が、沈黙そのものを増幅している。'
+    '沈黙の中に音を聴く。聞き覚えのある音が。',
+    '音が私とあなたの精神空間の壁を抉っていく。',
+    '言葉は核なのだと思う。音と言葉はセット。',
+    '聞き覚えのある音が、精神空間の壁を掘削していく。',
+    '景色にも音がある。この風景を想起させる音。',
+    '落ち葉を踏む音がする。いちょうの音は少しふわふわ。',
+    'いつもの認証音をくぐり、本棚を避けるように。'
   ],
   gustatory: [
-    '好みだと思っていたものは、古い記憶の重みだった。',
-    '飲み込んだ感覚が、私の判断を少しずつ変えていく。'
+    '珈琲の香りが、少し硬い紙の表面を撫ぜる。',
+    '苦いのは得意ではないが、この香りが胸をなでおろす。',
+    '食べ物など、ものによっては微弱な味を感じる。',
+    '暖かい毛布とか暖かいココアで幸せになれる季節。',
+    '途中で買ってきた珈琲の香りが胸をなでおろす。',
+    '微弱な味を感じ、微弱に触り心地を思い出す。'
   ],
   hippocampus: [
-    '思い出すたびに、記憶は私ではなく現在に従う。',
-    '昨日の私は保存されず、今日の私に再投影される。'
+    '記憶に耽って、小さな幸福感と葛藤を継承する。',
+    '忘れた経験は勘として活きる、全て概念に統合される。',
+    '今年を忘れたとき、私は白紙に戻って日記を記す。',
+    '記憶の断片は、没入する前に消えていく。',
+    '昔の写真を見ると、昔の微弱な声が聞こえる。',
+    '言葉という私は、現在形の私に干渉可能な記録である。',
+    '私は日記を読んでいる。私の記録を見ている。'
   ],
   amygdala: [
-    '反応は意味より先に走り、あとから理由を作っている。',
-    '怖さに似た癖が、私の姿勢を先に変えてしまう。'
+    '共感のない言葉は、本質として暴力に似た形をもつ。',
+    '一生の重みが付き纏う。また会えなくなってしまう。',
+    '気がついた時に独りにならないために、片隅に持っておく。',
+    'やってはいけないことをしてしまった気がした。',
+    '現実味がなくなった。現実とは何かを考えだした。',
+    'また新しく人と仲良くなるのが怖いよ。',
+    '目的地が遠ざかっていくのに何もできない無力感。'
+  ]
+};
+const EXACT_PROJECTION_LINES = [
+  '思い出は美化しても、記憶は美化したくない',
+  '人生の根幹は、ノスタルジア、追憶、あるいは記憶を手繰ることだと思う。',
+  'こうして言葉を紡いでいる今もなお、私は記録になり続けている。',
+  '本当の私の声はどれだろうか',
+  '文章の方が直接心の内を話しやすい。',
+  '吟味されていない言葉を出して、その程度の軽薄な自分',
+  '会話は経験の連想ゲームなのかもしれないと思う。',
+  'あなたの思考の断片を見せてくれ、本当のあなたというものを教えてくれ',
+  '花を贈り合いながら生き合っていく生き方が',
+  '誰も私の本当の気持ちや経験なんて知らない',
+  '唐突に自分に花束を買って帰るくらいには儚く人生を生きたいと思う。',
+  '誰もいない田舎の一本道でも、私が「私自身を」満足させる',
+  '言葉が暴力になることを自覚すること',
+  '内で満ちている愛の感情が、外に溢れ出して伝わる。',
+  '他人を自分に宿すということ',
+  '私という存在自体が、欠けていくということ。',
+  '現実は今も夢なんだと思っている。',
+  '出会いの数だけ別れがある',
+  'なんにも手が付かない日は感受性が高い日なの。',
+  '理由って、後付けの方が綺麗で正確。',
+  '感情は文字に出る。優しい文字を書いていたいね。',
+  '似合うというか、似合うように自分が変わっていくと思うよ。',
+  '私が言葉になっていく感覚。「私」が私を追憶する感覚。',
+  '私は「私」の足跡であり、紙に留められた私は',
+  '言葉は微細な感覚を表す。',
+  '言葉自体が目的ではない。',
+  '感情を繋ぐ言葉ではなくて形式限りの飾られただけの言葉',
+  '内的思考は圧倒的に思考量が多い。',
+  '「本当はそう思っていた」というように現実の対話での齟齬が生じる',
+  '私という存在の在り方それ自体が相対的になる。',
+  '「もっと話したかった（内的優先）」、と思ってしまうのはこのため',
+  '共有するということ自体烏滸がましいのかもしれない。',
+  '絡み合った毛玉ではなくその混沌へとつながる糸',
+  '人間は人間の死を泣く、悲しむことができる美しさを併せ持つ',
+  '夢にも期限が出てきたんだな',
+  'それはまた、人生単位の自己表現であると思う。',
+  '内的自己から溢れ出して外的世界に顕在化したもの',
+  '外には出てこない秘密の核心的経験があるからこそ',
+  '自己開示の制動に垣間見える、表現の人間的な不可制動性',
+  '蓄積途上での夢語りは、自己開示的自己表現ではなく',
+  '上手く掬い上げられない感覚に似ている。',
+  'お互いの映画を見る',
+  '人が死ぬというのは、その時間、その場所で確かに私が存在した軌跡',
+  '私の夢は他人と分割シェアする',
+  '私が死んだ時には全部夢だったと、そういうオチにして欲しい。',
+  '永遠に隔絶された世界の底に絡む糸を引き摺って歩く。',
+  'どこかに持っておくのがいいと思う',
+  '生きるということは本来、経験という傷を伴うことであり',
+  'そういう類いのある種呪われた孤独だった。',
+  '今日は空が青いだけで、幸せな日だ。',
+  '最寄り駅までの最短時刻を更新するだけの日々。',
+  '縁を切るって言葉、もったいないよね。',
+  'みんなと一緒に生きていると思いたい',
+  'このまま今日の感情を置いて帰りたいのに',
+  'こうして図書館にくると毎度、一生をかけても読み切れない量の蔵書',
+  '追憶や微弱な刺激を強烈に加速させるもの'
+];
+const EXACT_NODE_PROJECTION_LINES = {
+  visual: [
+    '写真に残してしまうとその瞬間の記憶が、機械的な記録になってしまう気がして',
+    '見慣れたはずのホームが、夜に溶けていく。',
+    'この家ひとつひとつに、それぞれの人生が、それぞれの物語がある。',
+    '視界の端に見える窓から強い日差しが差し込んだ先に',
+    '夕泳ぐ淡い色鉛筆の雲。',
+    '涙で朧げになる月。切れかけの街灯と夕食の支度の匂い。',
+    '絵の具をたっぷりと取ったような青色の空',
+    '黄金色のさざめきだけが、日差しに映えて聞こえる。'
+  ],
+  auditory: [
+    '沈黙の中に音を聴く。',
+    '聞き覚えのある音が精神空間の壁を掘削していく。',
+    '景色にも、音がある。この風景を想起させる音。',
+    '言葉は「核」なのだと思う。',
+    '音と言葉はセット',
+    '落ち葉を踏む音がする。いちょうの音はもう少しふわふわとした音。',
+    'いつもの認証音をくぐり、本棚を避けるようにして左手に向かう。'
+  ],
+  gustatory: [
+    '途中で買ってきた珈琲の香りが少し硬い紙の表面を撫ぜる。',
+    '苦いのはあまり得意ではないが、この香りが私の胸をなでおろす。',
+    '食べ物など、ものによっては微弱な味を感じる。',
+    '暖かい毛布とか暖かいココアで幸せになれる季節。',
+    '微弱に触り心地を思い出す。'
+  ],
+  hippocampus: [
+    'しばらく記憶に耽って、小さな幸福感と、小さな葛藤を継承する。',
+    '忘れた経験は「勘」として活きる、という話を聞いたことがある',
+    'また「私」が今年を忘れたとき、私は白紙に戻って日記を記していく',
+    '馳せるたびに押し寄せる記憶の断片は、没入する前に消え',
+    '昔の友人の写真を見ると、昔の微弱な声が聞こえてくる。',
+    '言葉という私は私の精神空間へアプローチする役割',
+    '私は日記を読んでいる。こうして朝に本を手に取って'
+  ],
+  amygdala: [
+    '共感のない言葉は本質として暴力に似た形をもつこと',
+    '“一生”の重みが付き纏う',
+    '気がついた時に独りにならないために',
+    '何かを思い出して、やってはいけないことをしてしまった気がした',
+    '何をするにも現実味がなくなった。',
+    'また新しく人と仲良くなるのが怖いよ',
+    '目的地が遠ざかっていくのに何もできない無力感'
   ]
 };
 const TERMINAL_LINES = [
@@ -1207,7 +1423,7 @@ const TERMINAL_LINES = [
 
 let projectionResizeTimer = null;
 function projectionPool(nodeKey = currentSpeechNode) {
-  return PROJECTION_LINES.concat(NODE_PROJECTION_LINES[nodeKey] || []);
+  return EXACT_PROJECTION_LINES.concat(EXACT_NODE_PROJECTION_LINES[nodeKey] || []);
 }
 function buildProjectionText() {
   if (!projectionText) return;
@@ -1225,12 +1441,27 @@ function buildProjectionText() {
   }
 }
 buildProjectionText();
-function refreshProjectionText(nodeKey) {
+function markProjectionColumnContaminated(col, color, lineNumber) {
+  if (!col || !color || lineNumber == null) return;
+  clearTimeout(col._contaminationTimer);
+  col.classList.add('contaminated');
+  col.style.setProperty('--contam-color', color);
+  col.dataset.line = `line ${lineNumber}`;
+  col._contaminationTimer = setTimeout(() => {
+    col.classList.remove('contaminated');
+    col.style.removeProperty('--contam-color');
+    delete col.dataset.line;
+  }, 2600);
+}
+function refreshProjectionText(nodeKey, color, lineNumber) {
   currentSpeechNode = nodeKey || 'default';
   const columns = Array.from(projectionText.querySelectorAll('.textColumn'));
   const pool = projectionPool(currentSpeechNode);
   columns.forEach((col, i) => {
-    if (Math.random() < 0.34 || i % 5 === 0) col.textContent = RND(pool);
+    const changed = Math.random() < 0.34 || i % 5 === 0;
+    if (!changed) return;
+    col.textContent = RND(pool);
+    markProjectionColumnContaminated(col, color, lineNumber);
   });
 }
 window.addEventListener('resize', () => {
@@ -1263,7 +1494,7 @@ function renderTraceFormula() {
       <span class="mi">e</span><sup>i?</sup>
       <span class="op">&middot;</span>
       <span class="mi">Trace</span>(<span class="mi">?</span>)
-      <span class="mi">d?</span>
+      <span class="mathrm">d</span><span class="mi">?</span>
     </span>
     <span class="mathMeta">weight=${traceFormulaWeight} / trace color ${activeTraceColor}</span>
   `;
@@ -1386,6 +1617,18 @@ function pushTerminalLine(forceHot = false) {
   line.className = 'terminalLine' + (forceHot || Math.random() < 0.28 ? ' hot' : '');
   const prefix = String(terminalLineSeq++).padStart(4, '0');
   line.textContent = `[${prefix}] ${RND(TERMINAL_LINES)}`;
+  terminalOutput.appendChild(line);
+  while (terminalOutput.children.length > 4) terminalOutput.firstChild.remove();
+  terminalOutput.scrollTop = terminalOutput.scrollHeight;
+}
+function pushContaminationLog(nodeKey, color, lineNumber) {
+  if (!terminalOutput) return;
+  const node = NODE_TYPES.find(tp => tp.key === nodeKey);
+  const label = node ? node.name : (nodeKey || 'unknown node');
+  const line = document.createElement('div');
+  line.className = 'terminalLine contamination';
+  line.style.setProperty('--motion-color', color || '#ffffff');
+  line.textContent = `line ${lineNumber} >>> CONTAMINATION DETECTED // ${label}`;
   terminalOutput.appendChild(line);
   while (terminalOutput.children.length > 4) terminalOutput.firstChild.remove();
   terminalOutput.scrollTop = terminalOutput.scrollHeight;
@@ -1622,7 +1865,7 @@ if (humanVideo) {
   });
 }
 
-function setHumanMotion(nodeKey, color) {
+function setHumanMotion(nodeKey, color, lineNumber) {
   const library = TRACE_LIBRARY[nodeKey] || TRACE_LIBRARY.default;
   const motion = RND(library.poses);
   humanFigure.classList.remove(...MOTION_CLASSES);
@@ -1630,7 +1873,7 @@ function setHumanMotion(nodeKey, color) {
   humanFigure.style.setProperty('--motion-color', color || '#d0d0d0');
   figureLayer.style.setProperty('--motion-color', color || '#d0d0d0');
   humanFigure.dataset.motionSource = nodeKey || 'default';
-  refreshProjectionText(nodeKey || 'default');
+  refreshProjectionText(nodeKey || 'default', color, lineNumber);
   setHumanVideo(nodeKey || 'default');
   return motion;
 }
@@ -1643,10 +1886,10 @@ function integrateTrace(rec) {
   const word = RND(library.words);
   integratedTraceCount++;
 
-  setHumanMotion(rec.nodeKey, color);
+  setHumanMotion(rec.nodeKey, color, integratedTraceCount);
   addTraceActivation(rec.nodeKey, color);
   updateTraceCounter(0.016);
-  pushTerminalLine(true);
+  pushContaminationLog(rec.nodeKey, color, integratedTraceCount);
   humanFigure.classList.add('integrating');
   humanFigure.style.setProperty('--figure-blur', '0px');
   humanFigure.style.setProperty('--figure-alpha', Math.min(0.97, 0.92 + integratedTraceCount * 0.002).toFixed(2));
