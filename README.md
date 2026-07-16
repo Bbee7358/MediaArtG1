@@ -1,33 +1,40 @@
-# Neuro Brain Visualization
+# MediaArt UI2 revised
 
-暗い3D空間に半透明の脳メッシュを配置し、内部をニューロン発火（色付き粒子）が絶えず駆け巡るビジュアライゼーション。脳内に散らばった5種類のノード（視覚野・聴覚野・味覚野・海馬・扁桃体）にカーソルを重ねると、そのノードに対応する画像・動画・音がレトロなポップアップ広告のように画面周囲に増殖する。
+`index.html` を Chrome または Edge で開いてください。メイン版と同じ実脳モデルはページ内へ埋め込まれているため、ローカルで直接開いても表示されます。最初の画面で再生ボタンを押すと、音声と操作が有効になります。
 
-Three.js を CDN から読み込む単一 HTML ファイル構成。
+## 5つの分類
 
-## 動かし方
+- `visual` — 後頭葉（視覚）
+- `temporal` — 側頭葉（聴覚・言語・記憶）
+- `parietal` — 頭頂葉（身体・空間・接触）
+- `frontal` — 前頭葉（行為・制作・失敗）
+- `limbic` — 辺縁系／深部（情動）
 
-`file://` で直接開くとブラウザのセキュリティ制限で脳モデル（`brain_areas/scene.bin`）が読めないため、簡易サーバー経由で開く。
+画面上の座標は「前 = +Z、上 = +Y、右 = +X」です。情動ノードは脳の深部に置かれ、粒子の中継点として表層4カテゴリへ滲む構成です。
 
-```bash
-cd brain-viz
-python3 -m http.server 8123
+## ポップアップ素材の追加
+
+1. 素材を分類別フォルダ（`visual` / `temporal` / `parietal` / `frontal` / `limbic`）へ入れます。
+2. `index.html` 内の `POPUP_MEDIA` にファイル名を追加します。
+
+例：`frontal/new-action.mp4` を追加した場合
+
+```js
+frontal: [
+  'new-action.mp4'
+],
 ```
 
-ブラウザで <http://localhost:8123> を開く。
+MP4（H.264映像・AAC音声を推奨）のほか、WebM、JPG、PNG、GIF、MP3、OGG、WAVを使用できます。複数登録した場合は、ポップアップのたびにランダムで1つが選ばれます。
 
-- ドラッグ：カメラ回転
+## 操作
+
+- ドラッグ：脳モデルを回転
 - ホイール：ズーム
-- ノード（発光する球）にカーソルを重ねる：ポップアップ出現
-
-## 素材の追加
-
-各ノードのフォルダ（`visual/ auditory/ gustatory/ hippocampus/ amygdala/`）に画像（jpg/png/gif）・動画（mp4/webm）・音声（mp3）を入れ、[index.html](index.html) 冒頭の `NODE_TYPES` の `files:` にファイル名を列挙する。素材が無い場合は `[not found]` のプレースホルダで代替される。
-
-## 調整
-
-ノードの配置・色・個数、粒子数、ポップアップの量や回避半径などは、すべて index.html 冒頭の設定ブロックでまとめて編集できる。
+- 色付きノードにカーソルを重ねる：ポップアップを表示
 
 ## クレジット
 
-3Dモデル "Brain Areas" by [Versal](https://sketchfab.com/versal) — licensed under [CC-BY-4.0](http://creativecommons.org/licenses/by/4.0/).
-This work is based on "Brain Areas" (https://sketchfab.com/3d-models/brain-areas-d64608a3978b47d8a39c5a15795ca8c4) by Versal licensed under CC-BY-4.0.
+3Dモデル "Brain Areas" by [Versal](https://sketchfab.com/versal) — [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)。
+
+リグ付き人物モデルは Quaternius の [Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html)（CC0 1.0 Universal）を使用しています。
