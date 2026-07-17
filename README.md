@@ -38,9 +38,9 @@ MP4（H.264映像・AAC音声を推奨）のほか、WebM、JPG、PNG、GIF、MP
 [medeiaart_jissen](https://github.com/Bbee7358/medeiaart_jissen.git) のiPhone ARセンサーとPC WebSocketサーバーに対応しています。画面は起動時に `ws://<表示中のPC>:8787` へ接続し、`touch_event` の接触開始・部位変更・接触終了を既存のポップアップ、音、人体への痕跡エフェクトへ渡します。通信がない場合も従来のマウス操作は使用できます。
 
 1. `medeiaart_jissen/brain-touch-system/pc-dashboard` で `npm install` を一度実行します。
-2. 同じフォルダで `npm run service:install` を一度実行し、8787番のサーバーを常時起動にします。
-3. iPhoneアプリの接続先を `ws://<MacまたはPCのIPアドレス>:8787` にしてアプリを開きます。接続は自動で始まります。
-4. この `index.html` を開きます。作品画面には接続状態やデバッグ情報を表示しません。接続確認が必要な場合は `http://127.0.0.1:8787/health` の `clientRoles.sensors` を確認します。
+2. 同じフォルダで `npm run server` を実行し、8787番のサーバーを起動します。
+3. iPhoneアプリの接続先を `ws://<MacまたはPCのIPアドレス>:8787` にして `Connect` を押します。
+4. この `index.html` を開き、左上が `BRAIN TOUCH / READY` になれば接続完了です。
 
 サーバーが別PCにある場合は、表示URLへ `?touchWs=ws://192.168.0.10:8787` のように追加します。通信を使わずマウスだけで確認する場合は `?touchWs=off` を指定します。
 
