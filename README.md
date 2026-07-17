@@ -33,6 +33,27 @@ MP4（H.264映像・AAC音声を推奨）のほか、WebM、JPG、PNG、GIF、MP
 - ホイール：ズーム
 - 色付きノードにカーソルを重ねる：ポップアップを表示
 
+## 現実の脳タッチとの接続
+
+[medeiaart_jissen](https://github.com/Bbee7358/medeiaart_jissen.git) のiPhone ARセンサーとPC WebSocketサーバーに対応しています。画面は起動時に `ws://<表示中のPC>:8787` へ接続し、`touch_event` の接触開始・部位変更・接触終了を既存のポップアップ、音、人体への痕跡エフェクトへ渡します。通信がない場合も従来のマウス操作は使用できます。
+
+1. `medeiaart_jissen/brain-touch-system/pc-dashboard` で `npm install` を一度実行します。
+2. 同じフォルダで `npm run server` を実行し、8787番のサーバーを起動します。
+3. iPhoneアプリの接続先を `ws://<MacまたはPCのIPアドレス>:8787` にして `Connect` を押します。
+4. この `index.html` を開き、左上が `BRAIN TOUCH / READY` になれば接続完了です。
+
+サーバーが別PCにある場合は、表示URLへ `?touchWs=ws://192.168.0.10:8787` のように追加します。通信を使わずマウスだけで確認する場合は `?touchWs=off` を指定します。
+
+現行iPhone版の12ブロックは、既存演出を変えないため次の5分類へまとめます。
+
+- 前側: `frontal`
+- 上面中央: `parietal`
+- 側面中央: `temporal`
+- 後側: `visual`
+- `cerebellum` / `brainstem` / `center`: `limbic`
+
+接触イベントが1.2秒以上届かない場合は、通信断でエフェクトが出続けないよう自動的に接触終了として扱います。
+
 ## クレジット
 
 3Dモデル "Brain Areas" by [Versal](https://sketchfab.com/versal) — [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)。

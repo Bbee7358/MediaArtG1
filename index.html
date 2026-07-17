@@ -98,6 +98,13 @@
     font-size: clamp(32px, 3.8vw, 64px); line-height: 0.9; letter-spacing: 0;
     text-shadow: 0 0 12px rgba(255,255,255,0.28);
   }
+  #touchConnection {
+    display: block; margin-top: 7px; color: rgba(255,255,255,0.72);
+    font: 10px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  #touchConnection[data-state="connected"] { color: #35e07a; }
+  #touchConnection[data-state="touching"] { color: #ffcf33; }
+  #touchConnection[data-state="error"] { color: #ff7a7a; }
   #legend { position: fixed; left: calc(var(--brain-width) - 170px); top: 12px; z-index:20;
     font: 11px/1.7 -apple-system, sans-serif; color: rgba(255,255,255,0.7);
     pointer-events:none; user-select:none; text-align:right; }
@@ -1357,6 +1364,7 @@
 </div>
 <div id="hud">
   Local projection generated.<br>Projection faded. Trace remains.
+  <span id="touchConnection" data-state="connecting">BRAIN TOUCH / CONNECTING</span>
 </div>
 <div id="source">
   <a href="https://github.com/kisa-expr/media-art1" target="_blank" rel="noopener">&lt;/&gt; source</a>
@@ -1962,6 +1970,8 @@ if (styleToggle) styleToggle.addEventListener('click', () => applyDesignStyle(ha
 const raycaster = new THREE.Raycaster();
 raycaster.params.Points = { threshold: 0.1 };
 const mouse = new THREE.Vector2(-2, -2);
+let mouseHoverKey = null;
+let remoteTouchKey = null;
 let hoverKey = null;
 
 canvas.addEventListener('mousemove', e => {
@@ -1982,12 +1992,156 @@ canvas.addEventListener('mouseleave', () => { mouse.set(-2, -2); mousePX = -9999
 function updateHover() {
   raycaster.setFromCamera(mouse, camera);
   const hits = raycaster.intersectObjects(nodeMeshes, false);
-  const key = hits.length ? hits[0].object.userData.nodeKey : null;
+  mouseHoverKey = hits.length ? hits[0].object.userData.nodeKey : null;
+  applyInteractionKey();
+}
+
+function applyInteractionKey() {
+  // 現実の接触を優先し、未接触時は従来のマウス操作をそのまま使う。
+  const key = remoteTouchKey || mouseHoverKey;
   if (key !== hoverKey) {
     hoverKey = key;
     onHoverChange(key);
   }
 }
+
+// ============================================================
+// 現実の脳タッチ入力（medeiaart_jissen / WebSocket 8787）
+// ============================================================
+const touchConnection = document.getElementById('touchConnection');
+const TOUCH_EVENT_TIMEOUT_MS = 1200;
+const TOUCH_RECONNECT_MS = 1500;
+const TOUCH_REGION_MAP = Object.freeze({
+  left_frontal_lobe: 'frontal', right_frontal_lobe: 'frontal',
+  left_parietal_lobe: 'parietal', right_parietal_lobe: 'parietal',
+  left_temporal_lobe: 'temporal', right_temporal_lobe: 'temporal',
+  left_occipital_lobe: 'visual', right_occipital_lobe: 'visual', occipital_lobe: 'visual',
+  cerebellum: 'limbic', brainstem: 'limbic', center: 'limbic'
+});
+let touchSocket = null;
+let touchReconnectTimer = null;
+let touchReleaseTimer = null;
+let latestTouchTimestamp = 0;
+let touchConnectionClosed = false;
+
+function setTouchConnectionStatus(text, state = 'connecting') {
+  if (!touchConnection) return;
+  touchConnection.textContent = `BRAIN TOUCH / ${text}`;
+  touchConnection.dataset.state = state;
+}
+
+function getTouchWebSocketUrl() {
+  const configured = new URLSearchParams(window.location.search).get('touchWs');
+  if (configured && configured.toLowerCase() === 'off') return null;
+  if (configured) return configured;
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const host = window.location.hostname || '127.0.0.1';
+  return `${protocol}://${host}:8787`;
+}
+
+function mapPhysicalRegionToNodeKey(region, surface) {
+  const regionId = typeof region === 'string' ? region.toLowerCase() : '';
+  const surfaceId = typeof surface === 'string' ? surface.toLowerCase() : '';
+  if (TOUCH_REGION_MAP[regionId]) return TOUCH_REGION_MAP[regionId];
+
+  // 現行iPhone版のSTL分類: top/side_lower × front/middle/back × left/right。
+  if (regionId.includes('_front_') || regionId === 'front') return 'frontal';
+  if (regionId.includes('_middle_')) return regionId.startsWith('top_') ? 'parietal' : 'temporal';
+  if (regionId.includes('_back_') || regionId === 'back') return 'visual';
+  if (regionId === 'top') return 'parietal';
+  if (regionId === 'left_side' || regionId === 'right_side') return 'temporal';
+
+  if (surfaceId === 'front') return 'frontal';
+  if (surfaceId === 'top') return 'parietal';
+  if (surfaceId === 'back') return 'visual';
+  if (surfaceId === 'left' || surfaceId === 'right' || surfaceId === 'side') return 'temporal';
+  return null;
+}
+
+function releaseRemoteTouch(statusText = 'READY') {
+  if (touchReleaseTimer) { clearTimeout(touchReleaseTimer); touchReleaseTimer = null; }
+  remoteTouchKey = null;
+  applyInteractionKey();
+  setTouchConnectionStatus(statusText, touchSocket?.readyState === WebSocket.OPEN ? 'connected' : 'error');
+}
+
+function handlePhysicalTouchEvent(event) {
+  if (!event || typeof event !== 'object') return;
+  const timestamp = Number(event.timestamp) || Date.now();
+  if (timestamp < latestTouchTimestamp) return;
+  latestTouchTimestamp = timestamp;
+
+  if (touchReleaseTimer) clearTimeout(touchReleaseTimer);
+  touchReleaseTimer = setTimeout(() => releaseRemoteTouch('SIGNAL TIMEOUT'), TOUCH_EVENT_TIMEOUT_MS);
+
+  if (event.isTouching !== true) {
+    remoteTouchKey = null;
+    applyInteractionKey();
+    setTouchConnectionStatus(event.handDetected === false ? 'NO HAND' : 'READY', 'connected');
+    return;
+  }
+
+  const key = mapPhysicalRegionToNodeKey(event.region, event.surface);
+  remoteTouchKey = key;
+  applyInteractionKey();
+  const regionLabel = event.regionLabel || event.region || 'UNKNOWN REGION';
+  const confidence = Number.isFinite(Number(event.confidence))
+    ? ` ${Math.round(Number(event.confidence) * 100)}%`
+    : '';
+  setTouchConnectionStatus(key ? `${regionLabel}${confidence}` : `UNMAPPED / ${regionLabel}`, key ? 'touching' : 'error');
+}
+
+function connectPhysicalTouch() {
+  const url = getTouchWebSocketUrl();
+  if (!url) {
+    setTouchConnectionStatus('DISABLED', 'error');
+    return;
+  }
+  if (touchConnectionClosed) return;
+  setTouchConnectionStatus('CONNECTING');
+  try {
+    touchSocket = new WebSocket(url);
+  } catch (error) {
+    schedulePhysicalTouchReconnect();
+    return;
+  }
+
+  touchSocket.addEventListener('open', () => {
+    setTouchConnectionStatus('READY', 'connected');
+    touchSocket.send(JSON.stringify({ type: 'hello', payload: { role: 'dashboard' } }));
+  });
+  touchSocket.addEventListener('message', message => {
+    try {
+      const parsed = JSON.parse(message.data);
+      if (parsed?.type === 'touch_event') handlePhysicalTouchEvent(parsed.payload);
+      else if (parsed?.version && typeof parsed.isTouching === 'boolean') handlePhysicalTouchEvent(parsed);
+    } catch (error) {
+      setTouchConnectionStatus('INVALID DATA', 'error');
+    }
+  });
+  touchSocket.addEventListener('close', () => {
+    touchSocket = null;
+    releaseRemoteTouch('DISCONNECTED');
+    schedulePhysicalTouchReconnect();
+  });
+  touchSocket.addEventListener('error', () => setTouchConnectionStatus('CONNECTION ERROR', 'error'));
+}
+
+function schedulePhysicalTouchReconnect() {
+  if (touchConnectionClosed || touchReconnectTimer) return;
+  touchReconnectTimer = setTimeout(() => {
+    touchReconnectTimer = null;
+    connectPhysicalTouch();
+  }, TOUCH_RECONNECT_MS);
+}
+
+window.addEventListener('pagehide', () => {
+  touchConnectionClosed = true;
+  if (touchReconnectTimer) clearTimeout(touchReconnectTimer);
+  if (touchReleaseTimer) clearTimeout(touchReleaseTimer);
+  touchSocket?.close();
+});
+connectPhysicalTouch();
 
 // ============================================================
 // ポップアップ（HTML/CSSレイヤー、素材無しでも動作）
