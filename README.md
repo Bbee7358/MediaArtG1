@@ -44,15 +44,15 @@ MP4（H.264映像・AAC音声を推奨）のほか、WebM、JPG、PNG、GIF、MP
 
 サーバーが別PCにある場合は、表示URLへ `?touchWs=ws://192.168.0.10:8787` のように追加します。通信を使わずマウスだけで確認する場合は `?touchWs=off` を指定します。
 
-現行iPhone版の12ブロックは、既存演出を変えないため次の5分類へまとめます。
+現行iPhone版の12ブロックは、模型上の前後・上下・左右を保ったまま次の分類へまとめます。左右は同じ分類でも画面上の発光位置に反映されます。
 
-- 前側: `frontal`
-- 上面中央: `parietal`
-- 側面中央: `temporal`
-- 後側: `visual`
+- `top/side_lower_front_left/right`: `frontal`
+- `top_middle_left/right`: `parietal`
+- `side_lower_middle_left/right`: `temporal`
+- `top/side_lower_back_left/right`: `visual`
 - `cerebellum` / `brainstem` / `center`: `limbic`
 
-接触イベントが1.2秒以上届かない場合は、通信断でエフェクトが出続けないよう自動的に接触終了として扱います。
+`limbic` は脳表面の12ブロックへ無理に割り当てず、深部の中継点として表層4分類の反応へ連鎖します。接触候補中は該当位置がぼやけて脈動し、接触確定後にだけ従来のポップアップ、音、軌跡エフェクトが始まります。接触イベントが1.2秒以上届かない場合は、通信断でエフェクトが出続けないよう自動的に接触終了として扱います。
 
 ## クレジット
 

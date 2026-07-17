@@ -103,6 +103,9 @@
     font: 10px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   #touchConnection[data-state="connected"] { color: #35e07a; }
+  #touchConnection[data-state="approaching"] {
+    color: #8fe9ff; text-shadow: 0 0 9px rgba(143,233,255,0.72);
+  }
   #touchConnection[data-state="touching"] { color: #ffcf33; }
   #touchConnection[data-state="error"] { color: #ff7a7a; }
   #legend { position: fixed; left: calc(var(--brain-width) - 170px); top: 12px; z-index:20;
@@ -1724,6 +1727,21 @@ const NODE_GLOW_TEX = (() => {
 const nodeGeo = new THREE.SphereGeometry(0.07, 16, 14);  // 大きな円の中心となるコア
 const hitGeo  = new THREE.SphereGeometry(0.26, 8, 8);    // ホバー用の当たり判定（不可視・やや大きめ）
 
+// 接触確定前だけ表示する、位置付きの柔らかな予兆光。
+const preTouchGlowMaterial = new THREE.SpriteMaterial({
+  map: NODE_GLOW_TEX,
+  color: 0xffffff,
+  transparent: true,
+  opacity: 0,
+  blending: THREE.AdditiveBlending,
+  depthTest: false,
+  depthWrite: false
+});
+const preTouchGlow = new THREE.Sprite(preTouchGlowMaterial);
+preTouchGlow.visible = false;
+preTouchGlow.renderOrder = 8;
+rootGroup.add(preTouchGlow);
+
 NODE_TYPES.forEach(tp => {
   const c = new THREE.Color(tp.color);
   nodeMap[tp.key] = { def: tp };
@@ -2011,18 +2029,39 @@ function applyInteractionKey() {
 const touchConnection = document.getElementById('touchConnection');
 const TOUCH_EVENT_TIMEOUT_MS = 1200;
 const TOUCH_RECONNECT_MS = 1500;
-const TOUCH_REGION_MAP = Object.freeze({
-  left_frontal_lobe: 'frontal', right_frontal_lobe: 'frontal',
-  left_parietal_lobe: 'parietal', right_parietal_lobe: 'parietal',
-  left_temporal_lobe: 'temporal', right_temporal_lobe: 'temporal',
-  left_occipital_lobe: 'visual', right_occipital_lobe: 'visual', occipital_lobe: 'visual',
-  cerebellum: 'limbic', brainstem: 'limbic', center: 'limbic'
+const TOUCH_REGION_TARGETS = Object.freeze({
+  top_front_left:         { key: 'frontal',  focus: [-1.05, 0.92,  2.38] },
+  top_front_right:        { key: 'frontal',  focus: [ 1.05, 0.92,  2.38] },
+  side_lower_front_left:  { key: 'frontal',  focus: [-1.62, 0.18,  1.92] },
+  side_lower_front_right: { key: 'frontal',  focus: [ 1.62, 0.18,  1.92] },
+  top_middle_left:        { key: 'parietal', focus: [-1.25, 1.36, -0.42] },
+  top_middle_right:       { key: 'parietal', focus: [ 1.25, 1.36, -0.42] },
+  side_lower_middle_left: { key: 'temporal', focus: [-2.08,-0.48,  0.02] },
+  side_lower_middle_right:{ key: 'temporal', focus: [ 2.08,-0.48,  0.02] },
+  top_back_left:          { key: 'visual',   focus: [-0.78, 0.55, -2.68] },
+  top_back_right:         { key: 'visual',   focus: [ 0.78, 0.55, -2.68] },
+  side_lower_back_left:   { key: 'visual',   focus: [-1.02,-0.05, -2.56] },
+  side_lower_back_right:  { key: 'visual',   focus: [ 1.02,-0.05, -2.56] },
+  left_frontal_lobe:      { key: 'frontal',  focus: [-1.10, 0.70,  2.34] },
+  right_frontal_lobe:     { key: 'frontal',  focus: [ 1.10, 0.70,  2.34] },
+  left_parietal_lobe:     { key: 'parietal', focus: [-1.24, 1.30, -0.55] },
+  right_parietal_lobe:    { key: 'parietal', focus: [ 1.24, 1.30, -0.55] },
+  left_temporal_lobe:     { key: 'temporal', focus: [-2.06,-0.52,  0.00] },
+  right_temporal_lobe:    { key: 'temporal', focus: [ 2.06,-0.52,  0.00] },
+  left_occipital_lobe:    { key: 'visual',   focus: [-0.82, 0.34, -2.66] },
+  right_occipital_lobe:   { key: 'visual',   focus: [ 0.82, 0.34, -2.66] },
+  occipital_lobe:         { key: 'visual',   focus: [ 0.00, 0.34, -2.66] },
+  cerebellum:             { key: 'limbic',   focus: [ 0.00,-0.42, -0.10] },
+  brainstem:              { key: 'limbic',   focus: [ 0.00,-0.56,  0.08] },
+  center:                 { key: 'limbic',   focus: [ 0.00,-0.22,  0.02] }
 });
 let touchSocket = null;
 let touchReconnectTimer = null;
 let touchReleaseTimer = null;
 let latestTouchTimestamp = 0;
 let touchConnectionClosed = false;
+let preTouchTarget = null;
+let preTouchIntensity = 0;
 
 function setTouchConnectionStatus(text, state = 'connecting') {
   if (!touchConnection) return;
@@ -2039,28 +2078,59 @@ function getTouchWebSocketUrl() {
   return `${protocol}://${host}:8787`;
 }
 
-function mapPhysicalRegionToNodeKey(region, surface) {
+function mapPhysicalTouchTarget(region, surface) {
   const regionId = typeof region === 'string' ? region.toLowerCase() : '';
   const surfaceId = typeof surface === 'string' ? surface.toLowerCase() : '';
-  if (TOUCH_REGION_MAP[regionId]) return TOUCH_REGION_MAP[regionId];
+  if (TOUCH_REGION_TARGETS[regionId]) return TOUCH_REGION_TARGETS[regionId];
 
-  // 現行iPhone版のSTL分類: top/side_lower × front/middle/back × left/right。
-  if (regionId.includes('_front_') || regionId === 'front') return 'frontal';
-  if (regionId.includes('_middle_')) return regionId.startsWith('top_') ? 'parietal' : 'temporal';
-  if (regionId.includes('_back_') || regionId === 'back') return 'visual';
-  if (regionId === 'top') return 'parietal';
-  if (regionId === 'left_side' || regionId === 'right_side') return 'temporal';
+  if (regionId.includes('_front_') || regionId === 'front') return { key: 'frontal', focus: [0, 0.70, 2.34] };
+  if (regionId.includes('_middle_')) return regionId.startsWith('top_')
+    ? { key: 'parietal', focus: [0, 1.30, -0.55] }
+    : { key: 'temporal', focus: [0, -0.52, 0] };
+  if (regionId.includes('_back_') || regionId === 'back') return { key: 'visual', focus: [0, 0.34, -2.66] };
+  if (regionId === 'top') return { key: 'parietal', focus: [0, 1.30, -0.55] };
+  if (regionId === 'left_side') return { key: 'temporal', focus: [-2.06, -0.52, 0] };
+  if (regionId === 'right_side') return { key: 'temporal', focus: [2.06, -0.52, 0] };
 
-  if (surfaceId === 'front') return 'frontal';
-  if (surfaceId === 'top') return 'parietal';
-  if (surfaceId === 'back') return 'visual';
-  if (surfaceId === 'left' || surfaceId === 'right' || surfaceId === 'side') return 'temporal';
+  if (surfaceId === 'front') return { key: 'frontal', focus: [0, 0.70, 2.34] };
+  if (surfaceId === 'top') return { key: 'parietal', focus: [0, 1.30, -0.55] };
+  if (surfaceId === 'back') return { key: 'visual', focus: [0, 0.34, -2.66] };
+  if (surfaceId === 'left') return { key: 'temporal', focus: [-2.06, -0.52, 0] };
+  if (surfaceId === 'right') return { key: 'temporal', focus: [2.06, -0.52, 0] };
+  if (surfaceId === 'side') return { key: 'temporal', focus: [0, -0.52, 0] };
   return null;
+}
+
+function setPreTouchTarget(target, intensity = 0) {
+  preTouchTarget = target;
+  preTouchIntensity = target ? Math.max(0.18, Math.min(1, intensity)) : 0;
+}
+
+function updatePreTouchVisual(now) {
+  const active = preTouchTarget && !remoteTouchKey;
+  const pulse = 0.90 + Math.sin(now * 0.009) * 0.10;
+  preTouchGlow.visible = Boolean(active);
+  if (active) {
+    const node = nodeMap[preTouchTarget.key]?.def;
+    preTouchGlow.position.fromArray(preTouchTarget.focus);
+    preTouchGlowMaterial.color.setHex(node?.color ?? 0xffffff);
+    preTouchGlowMaterial.opacity = (0.18 + preTouchIntensity * 0.48) * pulse;
+    const scale = (1.05 + preTouchIntensity * 1.25) * (0.96 + pulse * 0.08);
+    preTouchGlow.scale.setScalar(scale);
+  } else {
+    preTouchGlowMaterial.opacity = 0;
+  }
+
+  regionShellMaterials.forEach(material => {
+    const isTarget = active && material.userData.regionKey === preTouchTarget.key;
+    material.opacity = material.userData.baseOpacity + (isTarget ? preTouchIntensity * 0.16 * pulse : 0);
+  });
 }
 
 function releaseRemoteTouch(statusText = 'READY') {
   if (touchReleaseTimer) { clearTimeout(touchReleaseTimer); touchReleaseTimer = null; }
   remoteTouchKey = null;
+  setPreTouchTarget(null);
   applyInteractionKey();
   setTouchConnectionStatus(statusText, touchSocket?.readyState === WebSocket.OPEN ? 'connected' : 'error');
 }
@@ -2074,14 +2144,34 @@ function handlePhysicalTouchEvent(event) {
   if (touchReleaseTimer) clearTimeout(touchReleaseTimer);
   touchReleaseTimer = setTimeout(() => releaseRemoteTouch('SIGNAL TIMEOUT'), TOUCH_EVENT_TIMEOUT_MS);
 
+  const target = mapPhysicalTouchTarget(event.region, event.surface);
+  const distanceCm = Number(event.distanceCm);
+  const thresholdCm = Number(event.debug?.calibration?.touchThresholdCm) || 5;
+  const isCandidate = event.debug?.touchCandidate === true || event.debug?.strongTouchCandidate === true;
+  const isNearSurface = event.handDetected !== false
+    && Number.isFinite(distanceCm)
+    && distanceCm <= Math.max(8, thresholdCm * 1.6);
+
   if (event.isTouching !== true) {
     remoteTouchKey = null;
     applyInteractionKey();
-    setTouchConnectionStatus(event.handDetected === false ? 'NO HAND' : 'READY', 'connected');
+    if (target && (isCandidate || isNearSurface)) {
+      const proximity = Number.isFinite(distanceCm)
+        ? 1 - Math.min(1, distanceCm / Math.max(8, thresholdCm * 1.6))
+        : 0.5;
+      const candidateBoost = event.debug?.strongTouchCandidate === true ? 0.45 : (isCandidate ? 0.24 : 0);
+      setPreTouchTarget(target, 0.30 + proximity * 0.45 + candidateBoost);
+      const regionLabel = event.regionLabel || event.region || target.key;
+      setTouchConnectionStatus(`APPROACH / ${regionLabel}`, 'approaching');
+    } else {
+      setPreTouchTarget(null);
+      setTouchConnectionStatus(event.handDetected === false ? 'NO HAND' : 'READY', 'connected');
+    }
     return;
   }
 
-  const key = mapPhysicalRegionToNodeKey(event.region, event.surface);
+  setPreTouchTarget(null);
+  const key = target?.key || null;
   remoteTouchKey = key;
   applyInteractionKey();
   const regionLabel = event.regionLabel || event.region || 'UNKNOWN REGION';
@@ -2142,6 +2232,19 @@ window.addEventListener('pagehide', () => {
   touchSocket?.close();
 });
 connectPhysicalTouch();
+
+window.brainTouchInput = {
+  handleEvent: handlePhysicalTouchEvent,
+  get status() {
+    return {
+      remoteTouchKey,
+      preTouchKey: preTouchTarget?.key || null,
+      preTouchFocus: preTouchTarget?.focus || null,
+      preTouchIntensity,
+      connection: touchConnection?.dataset.state || null
+    };
+  }
+};
 
 // ============================================================
 // ポップアップ（HTML/CSSレイヤー、素材無しでも動作）
@@ -4018,6 +4121,7 @@ function animate(now) {
 
   updateParticles(dt);
   updateHover();
+  updatePreTouchVisual(now);
   updateAtlasAnnotations();
   updateTraceCounter(dt);
   updateTraceDistribution(dt);
