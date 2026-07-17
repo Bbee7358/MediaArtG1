@@ -236,8 +236,7 @@
   }
   #humanWall.model-ready #humanCanvas { opacity: 1; }
   #humanWall.video-ready #humanCanvas { opacity: 0; }
-  /* 人体は静止した3Dモデルだけを表示する。代替線画・反応図・動画は使わない。 */
-  #humanFigure,
+  /* Keep the abstract silhouette as a silent fallback when the 3D model cannot load. */
   #humanVideo,
   #humanStimulus,
   #humanResponse,
@@ -1261,6 +1260,35 @@
     #traceCounter::before,.neuralOrbit,.memoryTicker span,.fieldNote,.observationScale { animation:none!important; }
     .transferPulse,.atlasItem.active .atlasPin,.memoryResidue { animation:none!important; }
   }
+
+  /* Exhibition presentation: keep sensing active without explanatory overlays. */
+  #blueprintUi,
+  #themeToggle,
+  #styleToggle,
+  #hud,
+  #legend,
+  #projectionText,
+  #humanResponse,
+  #traceVoice,
+  #traceStats,
+  #terminalOutput,
+  .stimulusVerb {
+    display: none !important;
+  }
+  #audioGate::before { content: none !important; }
+  .memoryResidue::before { content: none !important; }
+  .popup {
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: 0 0 22px color-mix(in srgb, var(--ink, #8db8ff) 24%, transparent) !important;
+  }
+  .popup .body {
+    margin: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+  .popup .broken { border: 0 !important; background: transparent !important; }
 </style>
 </head>
 <body>
@@ -3608,11 +3636,10 @@ function fakeImageSrc() {
   }
 }
 
-// 「壊れた画像」＝ [not found] のプレースホルダ（グレースケール、固有色なし）
+// Missing media stays visually silent in the exhibition view.
 function makeBroken() {
   const el = document.createElement('div');
   el.className = 'broken';
-  el.innerHTML = `<span class="bic"></span><span class="balt">[not found]</span>`;
   return el;
 }
 
@@ -3991,8 +4018,7 @@ function spawnPopup(node) {
   if (activePopups.length >= MAX_POPUPS) removePopup(activePopups[0]);
 
   const pl = nextPlacement();
-  const { content, srcText, srcKind } = makePopupBody(node);
-  const base = srcText.split(/[\\/]/).pop() || srcText; // ファイル名（タイトルバー用）
+  const { content, srcText } = makePopupBody(node);
 
   const el = document.createElement('div');
   el.className = 'popup';
@@ -4002,26 +4028,11 @@ function spawnPopup(node) {
   el.style.zIndex = String(11 + (spawnSeq++ % 500));
   el.style.setProperty('--hand-tilt', ((Math.random() * 2.4) - 1.2).toFixed(2) + 'deg');
 
-  // レトロなタイトルバー（ファイル名＋最小化/最大化/閉じるボタン）
-  const titlebar = document.createElement('div');
-  titlebar.className = 'titlebar';
-  titlebar.innerHTML =
-    `<span class="tico"></span><span class="ttext"></span>` +
-    `<span class="tbtn">_</span><span class="tbtn">□</span><span class="tbtn">×</span>`;
-  titlebar.querySelector('.ttext').textContent = base;
-
-  // アドレス欄＝貼り付けた画像のソース（web の URL / PC のパス）
-  const srcbar = document.createElement('div');
-  srcbar.className = 'srcbar ' + srcKind;
-  srcbar.textContent = srcText;
-
   const body = document.createElement('div');
   body.className = 'body';
-  body.style.height = Math.max(38, pl.h - 44) + 'px';
+  body.style.height = Math.max(38, pl.h) + 'px';
   body.appendChild(content);
 
-  el.appendChild(titlebar);
-  el.appendChild(srcbar);
   el.appendChild(body);
   popupLayer.appendChild(el);
   activePopups.push({
